@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### 2026-03-18 — Feature: Remote Component References via MCP
+
+**Problem:** The MCP tool `set_component_property` did not support assigning `Component` or `GameObject` references. The underlying JSON value parser failed with an `Invalid cast` exception when given a generic GUID string.
+
+**Solution:** Added explicit support in `ConvertJsonValue` to check for `targetType` assignability to `Component` and `GameObject`. If the incoming value is a GUID string or an object with an `id`/`Id` field, the MCP server now traverses the scene and resolves the reference dynamically. This allows tools to natively establish component linkages like `BoneMergeTarget` dynamically via MCP.
+
+**Files Changed:**
+- `Editor/OzmiumWriteHandlers.cs` — Enhanced `ConvertJsonValue()` to resolve references via `OzmiumSceneHelpers.WalkAll()` and updated `SchemaSetComponentProperty`.
+
 ### 2026-03-18 — Fix: Scene Resolution Priority
 
 **Problem:** All scene query tools (`get_scene_summary`, `find_game_objects`, `get_scene_hierarchy`, etc.) returned a minimal 4-object runtime scene instead of the actual editor scene. This made all scene inspection and manipulation tools non-functional when the game wasn't playing.

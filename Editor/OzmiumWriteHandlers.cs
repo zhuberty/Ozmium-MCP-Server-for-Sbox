@@ -386,6 +386,55 @@ internal static class OzmiumWriteHandlers
 			return Enum.Parse( targetType, str, ignoreCase: true );
 		}
 
+		if ( typeof( Component ).IsAssignableFrom( targetType ) )
+		{
+			string guidStr = null;
+			if ( el.ValueKind == JsonValueKind.String )
+				guidStr = el.GetString();
+			else if ( el.ValueKind == JsonValueKind.Object )
+			{
+				if ( el.TryGetProperty( "Id", out var idProp ) ) guidStr = idProp.GetString();
+				else if ( el.TryGetProperty( "id", out var idProp2 ) ) guidStr = idProp2.GetString();
+			}
+
+			if ( !string.IsNullOrEmpty( guidStr ) && Guid.TryParse( guidStr, out var compGuid ) )
+			{
+				var scene = OzmiumSceneHelpers.ResolveScene();
+				if ( scene != null )
+				{
+					foreach ( var go in OzmiumSceneHelpers.WalkAll( scene, true ) )
+					{
+						var match = go.Components.GetAll().FirstOrDefault( c => c.Id == compGuid );
+						if ( match != null && targetType.IsAssignableFrom( match.GetType() ) )
+							return match;
+					}
+				}
+			}
+			return null;
+		}
+
+		if ( typeof( GameObject ).IsAssignableFrom( targetType ) )
+		{
+			string guidStr = null;
+			if ( el.ValueKind == JsonValueKind.String )
+				guidStr = el.GetString();
+			else if ( el.ValueKind == JsonValueKind.Object )
+			{
+				if ( el.TryGetProperty( "Id", out var idProp ) ) guidStr = idProp.GetString();
+				else if ( el.TryGetProperty( "id", out var idProp2 ) ) guidStr = idProp2.GetString();
+			}
+
+			if ( !string.IsNullOrEmpty( guidStr ) && Guid.TryParse( guidStr, out var goGuid ) )
+			{
+				var scene = OzmiumSceneHelpers.ResolveScene();
+				if ( scene != null )
+				{
+					return OzmiumSceneHelpers.WalkAll( scene, true ).FirstOrDefault( g => g.Id == goGuid );
+				}
+			}
+			return null;
+		}
+
 		// Fallback: try parsing from string
 		var raw = el.ValueKind == JsonValueKind.String ? el.GetString() : el.GetRawText();
 		return Convert.ChangeType( raw, targetType );
@@ -455,7 +504,7 @@ internal static class OzmiumWriteHandlers
 			["name"]          = new Dictionary<string, object> { ["type"] = "string",  ["description"] = "Exact name." },
 			["componentType"] = new Dictionary<string, object> { ["type"] = "string",  ["description"] = "Type substring." },
 			["propertyName"]  = new Dictionary<string, object> { ["type"] = "string",  ["description"] = "Exact C# property name." },
-			["value"]         = new Dictionary<string, object> { ["description"] = "The value to set. Can be string, number, boolean, or object {x,y,z} for Vector3." }
+			["value"]         = new Dictionary<string, object> { ["description"] = "The value to set. Can be string, number, boolean, object {x,y,z} for Vector3, or Component/GameObject GUID." }
 		},
 		new[] { "propertyName" } );
 

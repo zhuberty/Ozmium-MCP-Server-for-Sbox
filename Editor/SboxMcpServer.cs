@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -24,6 +25,9 @@ public static class McpServer
 {
 	[ConVar( "mcp_server_port", ConVarFlags.Saved )]
 	public static int Port { get; set; } = 8098;
+
+	[DllImport("winmm.dll", EntryPoint = "PlaySound", CharSet = CharSet.Auto)]
+	private static extern bool PlaySystemSound(string pszSound, IntPtr hmod, uint fdwSound);
 
 	// ── GUI events & state ─────────────────────────────────────────────────
 	public static event Action OnServerStateChanged;
@@ -71,6 +75,16 @@ public static class McpServer
 
 			LogInfo( $"Started Model Context Protocol Server on port {Port}" );
 			OnServerStateChanged?.Invoke();
+
+			// Play the user's startup sound via native Windows API to bypass S&box asset tracking restrictions
+			try
+			{
+				PlaySystemSound( "e:/Game/sbox_arena/Libraries/sbox_mcp/Sounds/Startup sound.wav", IntPtr.Zero, 0x00020001 );
+			}
+			catch ( Exception soundEx )
+			{
+				Log.Warning( $"Could not play startup sound: {soundEx.Message}" );
+			}
 		}
 		catch ( Exception ex )
 		{

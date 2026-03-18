@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Editor;
 using Sandbox;
 
@@ -11,7 +12,7 @@ public class McpServerWindow : Widget
 	private Label _portLabel;
 	private Label _sessionCountLabel;
 	private Button _toggleButton;
-	private Label _logLabel;
+	private Widget _logCanvas;
 
 	private static readonly List<string> _logEntries = new();
 	private const int MaxLogEntries = 200;
@@ -48,6 +49,16 @@ public class McpServerWindow : Widget
 		var root = Layout.Column();
 		root.Margin = 8;
 		root.Spacing = 6;
+
+		// ── Logo Header ────────────────────────────────────────────────
+		var logo = new Widget();
+		try
+		{
+			// background-position: center combined with background-repeat: no-repeat natively crops the excess padding!
+			logo.SetStyles( "background-image: url('e:/Game/sbox_arena/Libraries/sbox_mcp/Image/Logo.jpg'); background-position: center; background-repeat: no-repeat; min-height: 80px; margin-bottom: 8px;" );
+		}
+		catch { }
+		root.Add( logo );
 
 		// ── Status Row ─────────────────────────────────────────────────
 		var statusRow = Layout.Row();
@@ -100,7 +111,7 @@ public class McpServerWindow : Widget
 		clearBtn.ToolTip = "Clear Log";
 		clearBtn.FixedWidth = 26;
 		clearBtn.FixedHeight = 26;
-		clearBtn.Clicked += () => { _logEntries.Clear(); _logLabel.Text = ""; };
+		clearBtn.Clicked += () => { _logEntries.Clear(); _logCanvas.DestroyChildren(); };
 		logHeader.Add( clearBtn );
 		root.Add( logHeader );
 
@@ -108,14 +119,49 @@ public class McpServerWindow : Widget
 		var scroll = new ScrollArea( null );
 		scroll.MinimumHeight = 250;
 
-		_logLabel = new Label( "" );
-		_logLabel.WordWrap = true;
-		_logLabel.SetStyles( "font-family: monospace; font-size: 11px; padding: 4px;" );
-		scroll.Canvas = _logLabel;
+		_logCanvas = new Widget();
+		_logCanvas.Layout = Layout.Column();
+		scroll.Canvas = _logCanvas;
+
+		foreach ( var entry in _logEntries )
+		{
+			AddLogLabel( entry );
+		}
 
 		root.Add( scroll, 1 );
 
 		Layout = root;
+	}
+
+	private void AddLogLabel( string text )
+	{
+		var lbl = new Label( text );
+		lbl.WordWrap = true;
+		
+		string color = "#e5e7eb";
+		string weight = "normal";
+
+		if ( text.Contains( "[ERROR]" ) )
+		{
+			color = "#f87171";
+			weight = "bold";
+		}
+		else if ( text.Contains( "] Tool: " ) )
+		{
+			color = "#60a5fa";
+			weight = "bold";
+		}
+		else if ( text.Contains( "Started" ) || text.Contains( "Created new MCP" ) || text.Contains( "initialized" ) )
+		{
+			color = "#4ade80";
+		}
+		else if ( text.Contains( "] Waiting for" ) || text.Contains( "] Resumed on" ) || text.Contains( "Closed MCP" ) || text.Contains( "Stopped" ) )
+		{
+			color = "#9ca3af";
+		}
+
+		lbl.SetStyles( $"font-family: monospace; font-size: 11px; padding: 2px; color: {color}; font-weight: {weight};" );
+		_logCanvas.Layout.Add( lbl );
 	}
 
 	private void ToggleServer()
@@ -151,11 +197,17 @@ public class McpServerWindow : Widget
 	{
 		if ( !IsValid ) return;
 
-		_logEntries.Add( $"[{DateTime.Now:HH:mm:ss}] {message}" );
+		var text = $"[{DateTime.Now:HH:mm:ss}] {message}";
+		_logEntries.Add( text );
+
+		AddLogLabel( text );
 
 		if ( _logEntries.Count > MaxLogEntries )
+		{
 			_logEntries.RemoveAt( 0 );
-
-		_logLabel.Text = string.Join( "\n", _logEntries );
+			
+			var firstChild = _logCanvas.Children.FirstOrDefault();
+			firstChild?.Destroy();
+		}
 	}
 }
