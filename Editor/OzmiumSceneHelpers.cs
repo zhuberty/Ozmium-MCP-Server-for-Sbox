@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -23,7 +23,7 @@ internal static class OzmiumSceneHelpers
 	/// </summary>
 	internal static Scene ResolveScene()
 	{
-		if ( Game.ActiveScene != null ) return Game.ActiveScene;
+		// Prefer the editor session scene — this is what the user sees in the hierarchy panel.
 		try
 		{
 			var active = SceneEditorSession.Active;
@@ -32,6 +32,8 @@ internal static class OzmiumSceneHelpers
 				if ( s?.Scene != null ) return s.Scene;
 		}
 		catch { }
+		// Fall back to runtime scene (only meaningful during play mode or tests)
+		if ( Game.ActiveScene != null ) return Game.ActiveScene;
 		return null;
 	}
 
@@ -44,10 +46,21 @@ internal static class OzmiumSceneHelpers
 				yield return go;
 	}
 
+	/// <summary>Name marker that causes MCP to skip an object and its entire subtree.</summary>
+	internal const string IgnoreMarker = "(MCP IGNORE)";
+	/// <summary>Tag that causes MCP to skip an object and its entire subtree.</summary>
+	internal const string IgnoreTag = "mcp_ignore";
+	/// <summary>Max children before auto-skipping subtree walk (parent still returned).</summary>
+	internal const int MaxAutoWalkChildren = 25;
+
 	internal static IEnumerable<GameObject> WalkSubtree( GameObject root, bool includeDisabled = true )
 	{
 		if ( !includeDisabled && !root.Enabled ) yield break;
+		if ( root.Name != null && root.Name.IndexOf( IgnoreMarker, StringComparison.OrdinalIgnoreCase ) >= 0 ) yield break;
+		if ( root.Tags.Has( IgnoreTag ) ) yield break;
 		yield return root;
+		// Auto-skip children of objects with too many children (performance guard)
+		if ( root.Children.Count > MaxAutoWalkChildren ) yield break;
 		foreach ( var child in root.Children )
 			foreach ( var go in WalkSubtree( child, includeDisabled ) )
 				yield return go;

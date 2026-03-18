@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -98,6 +98,8 @@ internal static class OzmiumReadHandlers
 				foreach ( var go in scene.Children )
 				{
 					if ( !inclDisabled && !go.Enabled ) continue;
+					if ( go.Name?.IndexOf( OzmiumSceneHelpers.IgnoreMarker, StringComparison.OrdinalIgnoreCase ) >= 0 ) continue;
+					if ( go.Tags.Has( OzmiumSceneHelpers.IgnoreTag ) ) continue;
 					OzmiumSceneHelpers.AppendHierarchyLine( sb, go, 0, true );
 				}
 			}
@@ -112,6 +114,8 @@ internal static class OzmiumReadHandlers
 	private static void Walk( GameObject go, int depth, bool rootOnly, bool inclDisabled, StringBuilder sb )
 	{
 		if ( !inclDisabled && !go.Enabled ) return;
+		if ( go.Name?.IndexOf( OzmiumSceneHelpers.IgnoreMarker, StringComparison.OrdinalIgnoreCase ) >= 0 ) return;
+		if ( go.Tags.Has( OzmiumSceneHelpers.IgnoreTag ) ) return;
 		OzmiumSceneHelpers.AppendHierarchyLine( sb, go, depth, rootOnly );
 		if ( !rootOnly )
 			foreach ( var child in go.Children ) Walk( child, depth + 1, false, inclDisabled, sb );

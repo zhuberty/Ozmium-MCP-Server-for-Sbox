@@ -62,7 +62,9 @@ internal static class RpcDispatcher
 				else
 				{
 					// Scene API calls must run on the main thread.
+					logInfo?.Invoke( $"Waiting for GameTask.MainThread() to execute tool {toolName}..." );
 					await GameTask.MainThread();
+					logInfo?.Invoke( $"Resumed on MainThread for tool {toolName}." );
 
 					result = toolName switch
 					{

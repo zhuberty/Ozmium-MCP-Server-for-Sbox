@@ -101,7 +101,7 @@ internal static class AssetToolHandlers
 					["sceneName"]   = session.Scene?.Name,
 					["isPrefab"]    = session.Scene?.Name?.EndsWith( ".prefab", StringComparison.OrdinalIgnoreCase ) ?? false,
 					["objectCount"] = session.Scene != null
-						? SceneQueryHelpers.WalkAll( session.Scene, includeDisabled: true ).Count()
+						? session.Scene.Children.Count
 						: 0
 				} );
 			}

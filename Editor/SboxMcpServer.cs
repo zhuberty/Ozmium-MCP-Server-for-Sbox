@@ -216,7 +216,7 @@ public static class McpServer
 				var idCopy     = id;
 				var methodCopy = method;
 				var taskId     = Guid.NewGuid();
-				var task       = Task.Run( async () =>
+				var task       = GameTask.RunInThreadAsync( async () =>
 				{
 					try
 					{

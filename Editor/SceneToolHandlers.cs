@@ -143,6 +143,8 @@ internal static class SceneToolHandlers
 					void WalkSub( GameObject go, int depth )
 					{
 						if ( !includeDisabled && !go.Enabled ) return;
+						if ( go.Name?.IndexOf( SceneQueryHelpers.IgnoreMarker, StringComparison.OrdinalIgnoreCase ) >= 0 ) return;
+						if ( go.Tags.Has( SceneQueryHelpers.IgnoreTag ) ) return;
 						ToolHandlerBase.AppendHierarchyLine( sb, go, depth, showChildCount: rootOnly );
 						if ( !rootOnly )
 							foreach ( var child in go.Children )
@@ -156,6 +158,8 @@ internal static class SceneToolHandlers
 				foreach ( var go in scene.Children )
 				{
 					if ( !includeDisabled && !go.Enabled ) continue;
+					if ( go.Name?.IndexOf( SceneQueryHelpers.IgnoreMarker, StringComparison.OrdinalIgnoreCase ) >= 0 ) continue;
+					if ( go.Tags.Has( SceneQueryHelpers.IgnoreTag ) ) continue;
 					ToolHandlerBase.AppendHierarchyLine( sb, go, 0, showChildCount: true );
 				}
 			}
@@ -164,6 +168,8 @@ internal static class SceneToolHandlers
 				void Walk( GameObject go, int depth )
 				{
 					if ( !includeDisabled && !go.Enabled ) return;
+					if ( go.Name?.IndexOf( SceneQueryHelpers.IgnoreMarker, StringComparison.OrdinalIgnoreCase ) >= 0 ) return;
+					if ( go.Tags.Has( SceneQueryHelpers.IgnoreTag ) ) return;
 					ToolHandlerBase.AppendHierarchyLine( sb, go, depth, showChildCount: false );
 					foreach ( var child in go.Children )
 						Walk( child, depth + 1 );
@@ -501,10 +507,7 @@ internal static class SceneToolHandlers
 	/// </summary>
 	private static Scene ResolveScene()
 	{
-		if ( Game.ActiveScene != null ) return Game.ActiveScene;
-
-		// When the game is not running, the editor exposes scenes through
-		// SceneEditorSession. Use the active (focused) session if present.
+		// Prefer the editor session scene — this is what the user sees in the hierarchy panel.
 		try
 		{
 			var session = SceneEditorSession.Active;
@@ -516,6 +519,8 @@ internal static class SceneToolHandlers
 		}
 		catch { /* Editor API unavailable at runtime */ }
 
+		// Fall back to runtime scene (only meaningful during play mode or tests)
+		if ( Game.ActiveScene != null ) return Game.ActiveScene;
 		return null;
 	}
 

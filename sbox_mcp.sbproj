@@ -11,7 +11,7 @@
   "Mounts": null,
   "IsStandaloneOnly": false,
   "Metadata": {
-    "CsProjName": "Ozmium MCP Server",
+    "CsProjName": "",
     "Compiler": {
       "RootNamespace": "Sandbox",
       "DefineConstants": "SANDBOX",
