@@ -116,7 +116,7 @@ internal static class OzmiumAssetHandlers
 
 	internal static object GetModelInfo( JsonElement args )
 	{
-		string path = Get( args, "path", (string)null );
+		string path = NormalizePath( Get( args, "path", (string)null ) );
 		if ( string.IsNullOrEmpty( path ) ) return Txt( "Provide 'path' (model asset path, e.g. 'models/citizen_male.vmdl')." );
 
 		try
@@ -173,7 +173,7 @@ internal static class OzmiumAssetHandlers
 
 	internal static object GetMaterialProperties( JsonElement args )
 	{
-		string path = Get( args, "path", (string)null );
+		string path = NormalizePath( Get( args, "path", (string)null ) );
 		if ( string.IsNullOrEmpty( path ) ) return Txt( "Provide 'path' (material asset path, e.g. 'materials/dev/dev_01.vmat')." );
 
 		try
@@ -195,7 +195,7 @@ internal static class OzmiumAssetHandlers
 
 	internal static object GetPrefabStructure( JsonElement args )
 	{
-		string path = Get( args, "path", (string)null );
+		string path = NormalizePath( Get( args, "path", (string)null ) );
 		if ( string.IsNullOrEmpty( path ) ) return Txt( "Provide 'path' (relative prefab path, e.g. 'prefabs/player.prefab')." );
 
 		try
@@ -218,7 +218,7 @@ internal static class OzmiumAssetHandlers
 
 	internal static object ReloadAsset( JsonElement args )
 	{
-		string path = Get( args, "path", (string)null );
+		string path = NormalizePath( Get( args, "path", (string)null ) );
 		if ( string.IsNullOrEmpty( path ) ) return Txt( "Provide 'path'." );
 
 		try
@@ -232,6 +232,18 @@ internal static class OzmiumAssetHandlers
 	}
 
 	// ── Helpers ────────────────────────────────────────────────────────────
+
+	/// <summary>
+	/// Strips a leading "Assets/" or "assets/" prefix from a path so that
+	/// callers can pass either form and AssetSystem.FindByPath will work.
+	/// </summary>
+	private static string NormalizePath( string path )
+	{
+		if ( path == null ) return null;
+		if ( path.StartsWith( "Assets/", StringComparison.OrdinalIgnoreCase ) )
+			path = path.Substring( "Assets/".Length );
+		return path;
+	}
 
 	private static object Txt( string text ) => new { content = new object[] { new { type = "text", text } } };
 

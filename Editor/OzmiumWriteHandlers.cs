@@ -239,7 +239,7 @@ internal static class OzmiumWriteHandlers
 		var scene = OzmiumSceneHelpers.ResolveScene();
 		if ( scene == null ) return Txt( "No active scene." );
 
-		string path     = Get( args, "path",     (string)null );
+		string path     = NormalizePath( Get( args, "path", (string)null ) );
 		float  x        = Get( args, "x",        0f );
 		float  y        = Get( args, "y",        0f );
 		float  z        = Get( args, "z",        0f );
@@ -389,6 +389,14 @@ internal static class OzmiumWriteHandlers
 		// Fallback: try parsing from string
 		var raw = el.ValueKind == JsonValueKind.String ? el.GetString() : el.GetRawText();
 		return Convert.ChangeType( raw, targetType );
+	}
+
+	private static string NormalizePath( string path )
+	{
+		if ( path == null ) return null;
+		if ( path.StartsWith( "Assets/", StringComparison.OrdinalIgnoreCase ) )
+			path = path.Substring( "Assets/".Length );
+		return path;
 	}
 
 	private static object Txt( string text ) => new { content = new object[] { new { type = "text", text } } };
