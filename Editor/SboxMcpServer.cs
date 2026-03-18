@@ -14,9 +14,11 @@ using Sandbox;
 namespace SboxMcpServer;
 
 /// <summary>
-/// HTTP/SSE server that exposes MCP tools to AI clients.
-/// Handles transport concerns only — tool logic lives in ToolHandlers,
-/// schemas in ToolDefinitions, and scene helpers in SceneQueryHelpers.
+/// HTTP/SSE transport layer for the MCP server.
+/// Responsible for accepting connections, managing SSE sessions, and routing
+/// raw HTTP requests. Tool logic lives in SceneToolHandlers / ConsoleToolHandlers,
+/// dispatch in RpcDispatcher, schemas in SceneToolDefinitions / ConsoleToolDefinitions,
+/// and scene helpers in SceneQueryHelpers.
 /// </summary>
 public static class McpServer
 {
@@ -26,7 +28,7 @@ public static class McpServer
 	// ── GUI events & state ─────────────────────────────────────────────────
 	public static event Action OnServerStateChanged;
 	public static event Action<string> OnLogMessage;
-	public static bool IsRunning  => _listener != null && _listener.IsListening;
+	public static bool IsRunning   => _listener != null && _listener.IsListening;
 	public static int  SessionCount => _sessions.Count;
 
 	private static void LogInfo( string msg )  { Log.Info( msg );  OnLogMessage?.Invoke( msg ); }
@@ -42,9 +44,9 @@ public static class McpServer
 
 	internal static readonly JsonSerializerOptions JsonOptions = new()
 	{
-		PropertyNamingPolicy        = JsonNamingPolicy.CamelCase,
-		DefaultIgnoreCondition      = JsonIgnoreCondition.WhenWritingNull,
-		WriteIndented               = false
+		PropertyNamingPolicy   = JsonNamingPolicy.CamelCase,
+		DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+		WriteIndented          = false
 	};
 
 	// ── Lifecycle ──────────────────────────────────────────────────────────
@@ -83,8 +85,7 @@ public static class McpServer
 		_listener?.Close();
 		_listener = null;
 
-		// Wait briefly for any in-flight RPC tasks to complete before closing SSE streams,
-		// so they don't try to write to a closed stream.
+		// Wait briefly for any in-flight RPC tasks to complete before closing SSE streams.
 		var inflight = new List<Task>( _inflightTasks.Values );
 		if ( inflight.Count > 0 )
 		{
@@ -195,10 +196,10 @@ public static class McpServer
 
 		try
 		{
-			using var doc  = JsonDocument.Parse( body );
-			var root       = doc.RootElement;
-			string method  = root.TryGetProperty( "method", out var m ) ? m.GetString() : null;
-			object id      = null;
+			using var doc = JsonDocument.Parse( body );
+			var root      = doc.RootElement;
+			string method = root.TryGetProperty( "method", out var m ) ? m.GetString() : null;
+			object id     = null;
 
 			if ( root.TryGetProperty( "id", out var idProp ) )
 			{
@@ -211,22 +212,29 @@ public static class McpServer
 
 			if ( id != null )
 			{
-				var bodyCopy  = body;
-				var idCopy    = id;
+				var bodyCopy   = body;
+				var idCopy     = id;
 				var methodCopy = method;
-				var taskId    = Guid.NewGuid();
-				var task      = Task.Run( async () =>
+				var taskId     = Guid.NewGuid();
+				var task       = Task.Run( async () =>
 				{
 					try
 					{
-						await ProcessRpcRequest( session, idCopy, methodCopy, bodyCopy );
+						await RpcDispatcher.ProcessRpcRequest(
+							session, idCopy, methodCopy, bodyCopy,
+							JsonOptions, LogInfo, LogError );
 					}
 					catch ( Exception ex )
 					{
-						// ProcessRpcRequest faulted without sending a response — send an error now.
 						LogError( $"ProcessRpcRequest unhandled fault: {ex.Message}" );
-						var errResponse = new { jsonrpc = "2.0", id = idCopy, result = (object)null, error = new { code = -32603, message = $"Internal error: {ex.Message}" } };
-						var errJson     = JsonSerializer.Serialize( errResponse, JsonOptions );
+						var errResponse = new
+						{
+							jsonrpc = "2.0",
+							id      = idCopy,
+							result  = (object)null,
+							error   = new { code = -32603, message = $"Internal error: {ex.Message}" }
+						};
+						var errJson = JsonSerializer.Serialize( errResponse, JsonOptions );
 						await SendSseEvent( session, "message", errJson );
 					}
 					finally
@@ -249,146 +257,10 @@ public static class McpServer
 		}
 	}
 
-	// ── RPC dispatch ───────────────────────────────────────────────────────
+	// ── SSE write ──────────────────────────────────────────────────────────
 
-	private static async Task ProcessRpcRequest( McpSession session, object id, string method, string rawBody )
-	{
-		object result = null;
-		object error  = null;
-
-		using var doc  = JsonDocument.Parse( rawBody );
-		var root       = doc.RootElement;
-
-		try
-		{
-			if ( method == "initialize" )
-			{
-				result = new
-				{
-					protocolVersion = "2024-11-05",
-					capabilities    = new { tools = new { listChanged = true } },
-					serverInfo      = new { name = "SboxMcpServer", version = "1.1.0" }
-				};
-			}
-			else if ( method == "tools/list" )
-			{
-				result = new { tools = ToolDefinitions.All };
-			}
-			else if ( method == "tools/call" )
-			{
-				var args     = root.TryGetProperty( "params", out var p ) && p.TryGetProperty( "arguments", out var a ) ? a : default;
-				var toolName = root.GetProperty( "params" ).GetProperty( "name" ).GetString();
-
-				// run_console_command is dispatched through its own async method so that
-				// its method-level try/catch can intercept exceptions thrown by
-				// ConsoleSystem.Run on the main thread (nested catches in async methods
-				// don't reliably catch these in s&box's sandbox environment).
-				if ( toolName == "run_console_command" )
-				{
-					result = await RunConsoleCommandSafe( args );
-				}
-				else
-				{
-					// Scene API calls must run on the main thread.
-					await GameTask.MainThread();
-
-					result = toolName switch
-					{
-						"get_scene_summary"           => ToolHandlers.GetSceneSummary( JsonOptions ),
-						"get_scene_hierarchy"         => ToolHandlers.GetSceneHierarchy( args ),
-						"find_game_objects"           => ToolHandlers.FindGameObjects( args, JsonOptions ),
-						"find_game_objects_in_radius" => ToolHandlers.FindGameObjectsInRadius( args, JsonOptions ),
-						"get_game_object_details"     => ToolHandlers.GetGameObjectDetails( args, JsonOptions ),
-						"get_component_properties"    => ToolHandlers.GetComponentProperties( args, JsonOptions ),
-						"get_prefab_instances"        => ToolHandlers.GetPrefabInstances( args, JsonOptions ),
-						"list_console_commands"       => ToolHandlers.ListConsoleCommands( args, JsonOptions ),
-						_                             => throw new InvalidOperationException( $"Tool '{toolName}' not found" )
-					};
-				}
-
-				LogInfo( $"Tool: {toolName}" );
-			}
-			else
-			{
-				error = new { code = -32601, message = $"Method '{method}' not found" };
-			}
-		}
-		catch ( ArgumentException ex )
-		{
-			// Invalid parameters (e.g. missing required arg)
-			error = new { code = -32602, message = ex.Message };
-		}
-		catch ( Exception ex )
-		{
-			LogError( $"ProcessRpcRequest catch: method={method} ex={ex.Message}" );
-
-			// For run_console_command, convert engine exceptions into a friendly text result.
-			// Parse rawBody fresh since root/doc may be in an uncertain state after the fault.
-			if ( method == "tools/call" )
-			{
-				string toolNameCatch = null;
-				string cmdStrCatch   = "?";
-				try
-				{
-					var bodyDoc = JsonDocument.Parse( rawBody );
-					var paramsEl = bodyDoc.RootElement.GetProperty( "params" );
-					toolNameCatch = paramsEl.GetProperty( "name" ).GetString();
-					if ( paramsEl.TryGetProperty( "arguments", out var argsEl ) &&
-						argsEl.TryGetProperty( "command", out var cmdEl ) )
-						cmdStrCatch = cmdEl.GetString() ?? "?";
-				}
-				catch ( Exception parseEx )
-				{
-					LogError( $"ProcessRpcRequest catch parse error: {parseEx.Message}" );
-				}
-
-				LogError( $"ProcessRpcRequest catch: toolName={toolNameCatch}" );
-
-				if ( toolNameCatch == "run_console_command" )
-				{
-					result = ToolHandlers.TextResult( $"Command failed: {cmdStrCatch}\nError: {ex.Message}" );
-					error  = null;
-				}
-				else
-				{
-					error = new { code = -32603, message = $"Internal error: {ex.Message}" };
-				}
-			}
-			else
-			{
-				error = new { code = -32603, message = $"Internal error: {ex.Message}" };
-			}
-		}
-
-		var response = new { jsonrpc = "2.0", id, result, error };
-		var json     = JsonSerializer.Serialize( response, JsonOptions );
-		await SendSseEvent( session, "message", json );
-	}
-
-	/// <summary>
-	/// Runs run_console_command without awaiting GameTask.MainThread() so that
-	/// exceptions from ConsoleSystem.Run are catchable in a normal try/catch.
-	/// Unknown commands are pre-validated in ToolHandlers.RunConsoleCommand via
-	/// IsKnownConsoleCommand, so Run is never called for unknown commands.
-	/// Known commands that require the main thread will throw "Run must be called
-	/// on the main thread!" which is caught here and returned as a text result.
-	/// </summary>
-	private static Task<object> RunConsoleCommandSafe( JsonElement args )
-	{
-		var cmdStr = args.ValueKind != JsonValueKind.Undefined && args.TryGetProperty( "command", out var cp ) ? cp.GetString() : "";
-		try
-		{
-			return Task.FromResult( ToolHandlers.RunConsoleCommand( args ) );
-		}
-		catch ( Exception ex )
-		{
-			return Task.FromResult( ToolHandlers.TextResult( $"Command failed: {cmdStr}\nError: {ex.Message}" ) );
-		}
-	}
-
-	// ── SSE write ─────────────────────────────────────────────────────────
-
-	private static async Task SendSseEvent( McpSession session, string eventName, string data )
+	/// <summary>Writes a single SSE event to the given session's output stream.</summary>
+	internal static async Task SendSseEvent( McpSession session, string eventName, string data )
 	{
 		if ( session.SseResponse == null || !session.SseResponse.OutputStream.CanWrite ) return;
 		try

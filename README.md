@@ -108,14 +108,19 @@ Executes a console command. Errors are returned as text rather than thrown as ex
 
 | File | Responsibility |
 |---|---|
-| `SboxMcpServer.cs` | HTTP/SSE transport, JSON-RPC dispatch |
+| `SboxMcpServer.cs` | HTTP/SSE transport — listener, session management, SSE writes |
 | `McpSession.cs` | Session state (SSE connection + lifecycle) |
-| `ToolDefinitions.cs` | MCP tool schemas returned by `tools/list` |
-| `ToolHandlers.cs` | Tool call logic (one method per tool) |
+| `RpcDispatcher.cs` | JSON-RPC method routing — maps tool names to handler calls |
+| `SceneToolHandlers.cs` | Tool logic for all scene-inspection tools |
+| `ConsoleToolHandlers.cs` | Tool logic for `list_console_commands` and `run_console_command` |
+| `ToolHandlerBase.cs` | Shared handler utilities (`TextResult`, `AppendHierarchyLine`) |
+| `SceneToolDefinitions.cs` | MCP tool schemas for scene-inspection tools |
+| `ConsoleToolDefinitions.cs` | MCP tool schemas for console tools |
+| `ToolDefinitions.cs` | Aggregates all schemas for `tools/list` |
 | `SceneQueryHelpers.cs` | Pure scene-data helpers (path, tags, components, object builders, `WalkAll`/`WalkSubtree`) |
 | `McpServerWindow.cs` | Editor UI panel |
 
-To add a new tool: add its schema to `ToolDefinitions.cs`, implement its handler in `ToolHandlers.cs`, and add a case to the switch in `SboxMcpServer.cs`.
+To add a new tool: add its schema to the appropriate `*ToolDefinitions.cs` file, implement its handler in the appropriate `*ToolHandlers.cs` file, and add a case to the switch in `RpcDispatcher.cs`.
 
 ### Key design notes
 
