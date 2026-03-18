@@ -53,6 +53,15 @@ public static class McpServer
 		} );
 	}
 
+	private static void LogWarning( string msg )
+	{
+		_ = GameTask.RunInThreadAsync( () =>
+		{
+			Log.Warning( msg );
+			OnLogMessage?.Invoke( $"[WARNING] {msg}" );
+		} );
+	}
+
 	private static void NotifyStateChanged()
 	{
 		_ = GameTask.RunInThreadAsync( () => OnServerStateChanged?.Invoke() );
@@ -79,7 +88,7 @@ public static class McpServer
 	{
 		if ( _listener != null && _listener.IsListening )
 		{
-			Log.Info( "MCP Server is already running" );
+			LogInfo( "MCP Server is already running" );
 			return;
 		}
 
@@ -103,7 +112,7 @@ public static class McpServer
 			}
 			catch ( Exception soundEx )
 			{
-				Log.Warning( $"Could not play startup sound: {soundEx.Message}" );
+				LogWarning( $"Could not play startup sound: {soundEx.Message}" );
 			}
 		}
 		catch ( Exception ex )
@@ -151,7 +160,7 @@ public static class McpServer
 			}
 			catch ( Exception ex ) when ( ex is not ObjectDisposedException )
 			{
-				Log.Error( $"Error in MCP listen loop: {ex.Message}" );
+				LogError( $"Error in MCP listen loop: {ex.Message}" );
 			}
 		}
 	}
@@ -175,7 +184,7 @@ public static class McpServer
 		}
 		catch ( Exception ex )
 		{
-			Log.Error( $"Error handling MCP request: {ex.Message}" );
+			LogError( $"Error handling MCP request: {ex.Message}" );
 			res.StatusCode = 500;
 			res.Close();
 		}
@@ -287,7 +296,7 @@ public static class McpServer
 		}
 		catch ( Exception ex )
 		{
-			Log.Error( $"Error parsing JSON-RPC: {ex.Message}" );
+			LogError( $"Error parsing JSON-RPC: {ex.Message}" );
 		}
 	}
 
@@ -306,7 +315,7 @@ public static class McpServer
 		}
 		catch ( Exception ex )
 		{
-			Log.Warning( $"Failed to send SSE event to session {session.SessionId}: {ex.Message}" );
+			LogWarning( $"Failed to send SSE event to session {session.SessionId}: {ex.Message}" );
 		}
 	}
 }
