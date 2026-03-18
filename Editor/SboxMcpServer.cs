@@ -35,8 +35,28 @@ public static class McpServer
 	public static bool IsRunning   => _listener != null && _listener.IsListening;
 	public static int  SessionCount => _sessions.Count;
 
-	private static void LogInfo( string msg )  { Log.Info( msg );  OnLogMessage?.Invoke( msg ); }
-	private static void LogError( string msg ) { Log.Error( msg ); OnLogMessage?.Invoke( $"[ERROR] {msg}" ); }
+	private static void LogInfo( string msg )
+	{
+		_ = GameTask.RunInThreadAsync( () =>
+		{
+			Log.Info( msg );
+			OnLogMessage?.Invoke( msg );
+		} );
+	}
+
+	private static void LogError( string msg )
+	{
+		_ = GameTask.RunInThreadAsync( () =>
+		{
+			Log.Error( msg );
+			OnLogMessage?.Invoke( $"[ERROR] {msg}" );
+		} );
+	}
+
+	private static void NotifyStateChanged()
+	{
+		_ = GameTask.RunInThreadAsync( () => OnServerStateChanged?.Invoke() );
+	}
 
 	// ── Internal state ─────────────────────────────────────────────────────
 	private static HttpListener _listener;
@@ -74,7 +94,7 @@ public static class McpServer
 			Task.Run( () => ListenLoop( _cts.Token ) );
 
 			LogInfo( $"Started Model Context Protocol Server on port {Port}" );
-			OnServerStateChanged?.Invoke();
+			NotifyStateChanged();
 
 			// Play the user's startup sound via native Windows API to bypass S&box asset tracking restrictions
 			try
@@ -115,7 +135,7 @@ public static class McpServer
 		_sessions.Clear();
 
 		LogInfo( "Stopped Model Context Protocol Server" );
-		OnServerStateChanged?.Invoke();
+		NotifyStateChanged();
 	}
 
 	// ── HTTP listen loop ───────────────────────────────────────────────────
@@ -181,7 +201,7 @@ public static class McpServer
 			await res.OutputStream.FlushAsync();
 
 			LogInfo( $"Created new MCP SSE session: {sessionId}" );
-			OnServerStateChanged?.Invoke();
+			NotifyStateChanged();
 
 			await session.Tcs.Task; // keep alive until closed
 		}
@@ -191,7 +211,7 @@ public static class McpServer
 			_sessions.TryRemove( sessionId, out _ );
 			try { res.Close(); } catch { }
 			LogInfo( $"Closed MCP SSE session: {sessionId}" );
-			OnServerStateChanged?.Invoke();
+			NotifyStateChanged();
 		}
 	}
 
@@ -262,7 +282,7 @@ public static class McpServer
 			{
 				session.Initialized = true;
 				LogInfo( $"MCP Session {sessionId} initialized." );
-				OnServerStateChanged?.Invoke();
+				NotifyStateChanged();
 			}
 		}
 		catch ( Exception ex )

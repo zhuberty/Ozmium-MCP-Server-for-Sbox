@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### 2026-03-18 — Feature: Custom Logo Header & Colorized Logs
+
+**Problem:** The MCP Server panel was a standard gray interface with a monolithic block of uncolored text, making it difficult to distinguish tool names from initialization events or errors. Additionally, standard audio `.wav` files were ignored by S&box's rigid asset pipeline.
+
+**Solution:** 
+- Injected the **Ozmium Logo** into the top of the GUI using Qt-native `background-image` layout rules for an aggressive, clean crop.
+- Reconstructed the Activity Log into a dynamic `Layout.Column()` of distinct `Label` elements carrying customized CSS tracking:
+  - **Red:** Errors
+  - **Blue:** Active tool commands
+  - **Green:** Boot sequences and initialization
+  - **Gray:** Internal engine routing tasks
+- Integrated a native Windows P/Invoke audio player (`winmm.dll`) to trigger `Startup sound.wav` universally to instantly bypass S&box's asset compilation pipeline requirements.
+
+**Files Changed:**
+- `Editor/McpServerWindow.cs` — Integrated the logo widget, restructured `_logCanvas`, mapped formatting.
+- `Editor/SboxMcpServer.cs` — Integrated `PlaySystemSound` interop call.
 ### 2026-03-18 — Feature: Remote Component References via MCP
 
 **Problem:** The MCP tool `set_component_property` did not support assigning `Component` or `GameObject` references. The underlying JSON value parser failed with an `Invalid cast` exception when given a generic GUID string.
